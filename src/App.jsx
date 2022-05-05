@@ -6,13 +6,13 @@ function App() {
   const [initialized, setInitialized] = useState(false);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState(new Map());
-  const [usersEmpty, setUsersEmpty] = useState([]);
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(0);
   const [firstElement, setFirstElement] = useState(0);
   const [y, setY] = useState(window.scrollY);
   const direction = useRef("down");
+  const offsetHeight = useRef(0);
   const fetchUsers = async (front = true, page) => {
     if (loading) {
       return;
@@ -23,7 +23,7 @@ function App() {
       "http://localhost:8000/api/users?page=" + page
     );
     const data = await response.json();
-    if (users.size >= usersToKeep) {
+    if (users.size > 0) {
       if (front) {
         const newUsers = users;
         // If stored users are already the total allowed, remove the total we are going to add
@@ -32,7 +32,6 @@ function App() {
             newUsers.delete(newUsers.keys().next().value);
           }
         }
-
         // Calculate current index based on the page
         let i = data.current_page * perPage - perPage + 1;
 
@@ -43,11 +42,7 @@ function App() {
         });
 
         setFirstElement(newUsers.keys().next().value);
-        if (data.current_page <= 2) {
-          setUsersEmpty(Array(usersToKeep).fill(null));
-        } else {
-          setUsersEmpty(Array(perPage * data.current_page).fill(null));
-        }
+
         setUsers(newUsers);
       }
 
@@ -66,14 +61,22 @@ function App() {
 
         setUsers(new Map([...usersMap]));
         setFirstElement(usersMap.keys().next().value);
-        if (data.current_page <= 2) {
-          setUsersEmpty(Array(usersToKeep).fill(null));
-        } else {
-          setUsersEmpty(Array(perPage * data.current_page).fill(null));
-        }
       }
+
+      const offsetPage = 100 * perPage * data.current_page;
+
+      if (data.currentPage < 3) {
+        offsetHeight.current = 0;
+      } else {
+        offsetHeight.current = offsetPage;
+      }
+      console.log(
+        "🚀 ~ fetchUsers ~ offsetHeight.current",
+        offsetHeight.current
+      );
     } else {
       // Only runs on mount
+
       const usersMap = new Map();
       let i = data.current_page * perPage - perPage + 1;
       data.data.forEach((user) => {
@@ -81,8 +84,8 @@ function App() {
         i++;
       });
 
-      setUsers(new Map([...users, ...usersMap]));
-      setUsersEmpty(Array(perPage * data.current_page).fill(null));
+      setUsers(new Map([...usersMap]));
+
       setPerPage(data.per_page);
       setLastPage(data.last_page);
     }
@@ -169,29 +172,51 @@ function App() {
     [loading]
   );
 
+  const content = () => {
+    const list = [];
+    const from = currentPage <= 2 ? 1 : currentPage * perPage - usersToKeep;
+    const to = currentPage <= 2 ? usersToKeep : currentPage * perPage;
+    let y = 1;
+    for (let i = from; i < to; i++) {
+      if (users.has(i)) {
+        if (i === firstElement) {
+          list.push(
+            <div ref={firstUserRef} style={{ backgroundColor: "red" }}>
+              <UserCard user={users.get(i)} />
+            </div>
+          );
+        } else if (y + 1 === users.size) {
+          list.push(
+            <div ref={lastUserRef}>
+              <UserCard
+                user={users.get(i)}
+                style={{ backgroundColor: "blue" }}
+              />
+            </div>
+          );
+        } else {
+          list.push(
+            <div>
+              <UserCard user={users.get(i)} />
+            </div>
+          );
+        }
+
+        y++;
+      }
+    }
+    return list;
+  };
+
   return (
     <div className="flex flex-col justify-center max-w-lg  mx-auto p-5">
-      {usersEmpty.map((item, index) => {
-        if (index === firstElement) {
-          return (
-            <div ref={firstUserRef}>
-              <UserCard user={users.get(index + 1)} />
-            </div>
-          );
-        }
-        if (index + 1 === usersEmpty.length) {
-          return (
-            <div ref={lastUserRef}>
-              <UserCard user={users.get(index + 1)} />
-            </div>
-          );
-        }
-        return (
-          <div>
-            <UserCard user={users.get(index + 1)} />
-          </div>
-        );
-      })}
+      <div
+        style={{
+          width: "1px",
+          height: `${offsetHeight.current}px`,
+        }}
+      />
+      {content()}
     </div>
   );
 }
